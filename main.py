@@ -2,6 +2,7 @@ import dbConnection
 from PyQt5.QtWidgets import *
 import sys
 from arayuz import Arayuz
+import imfit.IMFIT_functions as IMFITDB
 
 
 def start():
@@ -11,11 +12,58 @@ def start():
     sys.exit(qApp.exec())
 
 
-connection = dbConnection.connect("VVToolDataBase", "postgres", "241559")
+connection = dbConnection.connect("postgres", "postgres", "2415")
 
 # functions comes here
-connection.commit()
-start()
+# connection.commit()
+IMFITDB.set_systemid(connection, 'system1')
+# IMFITDB.insert_sourcecodeWithStr(connection, 'SOURCE CODE', 'CONTENT\\n xd')
+#IMFITDB.update_sourcecode_withstr(connection, 'updated source code data')
+IMFITDB.set_codeid(connection, 'SOURCE CODE')
+#IMFITDB.insert_workload(connection, 'WORKLOAD TEST', '{"name": "Bob", "languages": "English"}', 'workload title', 'workload process')
+# workloads= IMFITDB.list_workloads(connection)
+#print(workloads)
+#IMFITDB.update_workloaddata(connection, 'WORKLOAD TEST', '{"name": "Bab", "languages": "English"}')
+#IMFITDB.insert_snippet(connection, 'testsnipttet', 'regex', 'sniptitle', 'snipproces')
+#IMFITDB.list_snippets(connection)
+#IMFITDB.insert_line(connection, 'testsatiri')
+#IMFITDB.list_lines(connection)
+#IMFITDB.insert_FIplan(connection, 'testfiplan2')
+IMFITDB.set_planid(connection, 'testfiplan2')
+#IMFITDB.list_FIplans(connection)
+
+#IMFITDB.insert_fault(connection, 'testfault')
+#IMFITDB.insert_fault(connection, 'testfault2')
+#IMFITDB.list_faults(connection)
+
+#IMFITDB.insert_originalline(connection, 'testsatiri', 'testfault2')
+#IMFITDB.list_originallinesfromFIplan(connection)
+#IMFITDB.get_originallineid(connection, 'testsatiri')
+
+#IMFITDB.insert_mutant(connection, 'testsatiri', 'mutanttestsatiri')
+#IMFITDB.get_mutantline(connection, 'testsatiri')
+
+#IMFITDB.get_FIplancontext(connection)
+
+#IMFITDB.insert_execution(connection, 'testexec3', 't_ubuntu', 't_ros', 't_python', 't_gazebo', 65, 45)
+#IMFITDB.get_execution(connection, 'testexec')
+#IMFITDB.get_executionid(connection, 'testexec')
+#IMFITDB.list_executions(connection)
+#IMFITDB.update_executiongazebo(connection, 'testexec3', 'updatedgazebo')
+
+#IMFITDB.insert_metric(connection, 'testexec3', 'testmetric', 521)
+#IMFITDB.list_metrics(connection, 'testexec3')
+
+#IMFITDB.insert_state(connection, 'testexec3', 'teststatae' , 214321)
+#IMFITDB.list_states(connection, 'testexec3')
+
+# IMFITDB.insert_rosbag(connection, 'testexec3', 'testrosbagnname', 'testrosbagdata')
+# IMFITDB.get_rosbagdata(connection, 'testexec3')
+# IMFITDB.insert_rosbag(connection, 'testexec3', 'testrosbagnname2', 'testrosbagdata2')
+# IMFITDB.list_rosbags(connection, 'testexec3')
+
+#IMFITDB.insert_report(connection, 'testexec3')
+#start()
 connection.close()
 
 

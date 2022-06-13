@@ -35,7 +35,7 @@ class Arayuz(QMainWindow):
         self.systemid = None
         self.codeid = None
         self.fiplanid = None
-        self.initUppaalROSMSettings()
+        #self.initUppaalROSMSettings()
         self.resizeWindow()
 
 
