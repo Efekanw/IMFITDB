@@ -25,6 +25,19 @@ def set_planid(connection, planname):
     return planID
 
 
+def add_time_to_system(connection, time):
+    try:
+        cursor = connection.cursor()
+
+        cursor.execute("UPDATE tblsystem SET timedata = %s WHERE systemid = %s",
+                       (time, sysID))
+        connection.commit()
+        cursor.close()
+    except(Exception, psycopg2.Error) as errorMsg:
+        print("A database-related error occured: ", errorMsg)
+        return []
+
+
 # Returns system id
 def get_systemid(connection, systemname):
     try:
@@ -70,11 +83,12 @@ def insert_sourcecode(connection, code_name):
         return []
 
 
-def insert_sourcecodeWithStr(connection, codename , codestr):
+def insert_sourcecodeWithStr(connection, codename, codestr):
     try:
         cursor = connection.cursor()
-        cursor.execute("INSERT INTO tblsourcecode( systemid, codename, sourcecode) VALUES( %s, %s, %s)",
-                       (sysID, codename, codestr))
+        cursor.execute("""INSERT INTO tblsourcecode( systemid, codename, sourcecode)
+                                  SELECT %s, %s, %s
+                                  WHERE NOT EXISTS(SELECT 1 FROM tblsourcecode WHERE systemid = %s AND codename = %s)""", (sysID, codename, codestr, sysID, codename))
         connection.commit()
         cursor.close()
     except(Exception, psycopg2.Error) as errorMsg:
@@ -118,7 +132,7 @@ def update_sourcecode(connection, file_name):
         with open(file_name) as f:
             source_code = f.readlines()
         str_source_code = ''.join(source_code)
-        cursor.execute("UPDATE tblsourcecode SET sourcecode = %s WHERE codename = %s AND systemid = %s",
+        cursor.execute("UPDATE tblsourcecode SET sourcecode = %s WHERE codeid = %s AND systemid = %s",
                        (str_source_code, codeID, sysID))
         updated_rows = cursor.rowcount
         print(updated_rows)
@@ -127,6 +141,21 @@ def update_sourcecode(connection, file_name):
     except(Exception, psycopg2.Error) as errorMsg:
         print("A database-related error occured: ", errorMsg)
         return []
+
+
+def update_sourcecode_withstr(connection, source_code_string):
+    try:
+        cursor = connection.cursor()
+        cursor.execute("UPDATE tblsourcecode SET sourcecode = %s WHERE codeid = %s AND systemid = %s",
+                       (source_code_string, codeID, sysID))
+        updated_rows = cursor.rowcount
+        print(updated_rows)
+        connection.commit()
+        cursor.close()
+    except(Exception, psycopg2.Error) as errorMsg:
+        print("A database-related error occured: ", errorMsg)
+        return []
+
 
 
 # Lists workloads
@@ -176,9 +205,9 @@ def get_workload(connection, workloadname):
 def update_workloaddata(connection, workloadname, workloaddata):
     try:
         cursor = connection.cursor()
-        datastore = json.load(workloaddata)
+        datastore = json.loads(workloaddata)
         new_data = json.dumps(datastore)
-        cursor.execute("UPDATE tblworkload SET data = %s WHERE codeid = %s AND workloadname",
+        cursor.execute("UPDATE tblworkload SET data = %s WHERE codeid = %s AND workloadname = %s",
                        (new_data, codeID, workloadname))
         updated_rows = cursor.rowcount
         print(updated_rows)
@@ -190,10 +219,10 @@ def update_workloaddata(connection, workloadname, workloaddata):
 
 
 # If workloadname has not already exists, Insert workload into database
-def insert_workload(connection, codeid, workloadname, data, workloadtitle, workloadprocess):
+def insert_workload(connection, workloadname, data, workloadtitle, workloadprocess):
     try:
         cursor = connection.cursor()
-        datastore = json.load(data)
+        datastore = json.loads(data)
         new_data = json.dumps(datastore)
         cursor.execute("""INSERT INTO tblworkload( codeid, workloadname, data, workloadtitle, workloadprocess)
                           SELECT %s, %s, %s, %s, %s
@@ -300,6 +329,7 @@ def insert_line(connection, linename):
         cursor = connection.cursor()
         cursor.execute("INSERT INTO tblline( codeid, linename) VALUES( %s, %s)",
                        (codeID, linename, ))
+        connection.commit()
         cursor.close()
     except(Exception, psycopg2.Error) as errorMsg:
         print("A database-related error occured: ", errorMsg)
@@ -322,14 +352,13 @@ def list_lines(connection):
 
 
 # INSERT orginalline into database
-def insert_originalline(connection, linename, planname, faultname):
+def insert_originalline(connection, linename, faultname):
     try:
         cursor = connection.cursor()
         lineid = get_lineid(connection, linename)
-        planid = get_FIplanid(connection, planname)
-        faultid = get_faultid(connection, planid, faultname)
+        faultid = get_faultid(connection, faultname)
         cursor.execute("INSERT INTO tbloriginalline( lineid, planid, faultid) VALUES( %s, %s, %s)",
-                       (lineid, planid, faultid, ))
+                       (lineid, planID, faultid, ))
         connection.commit()
         cursor.close()
     except(Exception, psycopg2.Error) as errorMsg:
@@ -367,10 +396,10 @@ def get_FIplanid(connection, planname):
 
 
 # List originallines according to FI plan
-def list_originallinesfromFIplan(connection, planname):
+def list_originallinesfromFIplan(connection):
     try:
         cursor = connection.cursor()
-        cursor.execute("SELECT linename FROM tbloriginalline INNER JOIN tblline ON tbloriginalline.lineid = tblline.lineid INNER JOIN tblfiplan ON tbloriginalline.planid = tblfiplan.planid WHERE tblfiplan.planname= %s AND tblline.codeid = %s", (planname, codeID, ))
+        cursor.execute("SELECT linename FROM tbloriginalline INNER JOIN tblline ON tbloriginalline.lineid = tblline.lineid INNER JOIN tblfiplan ON tbloriginalline.planid = tblfiplan.planid WHERE tblfiplan.planid= %s AND tblline.codeid = %s", (planID, codeID, ))
         myline = cursor.fetchone()
         print(myline)
         cursor.close()
@@ -414,10 +443,10 @@ def list_FIplans(connection):
 def insert_FIplan(connection, planname):
     try:
         cursor = connection.cursor()
-        cursor.execute("""INSERT INTO tblfiplan (planname) 
-                        SELECT %s
+        cursor.execute("""INSERT INTO tblfiplan (planname, codeid) 
+                        SELECT %s, %s
                         WHERE NOT EXISTS(SELECT 1 FROM tblfiplan
-                        WHERE planname=%s AND codeid=%s)""", (planname, planname, codeID, ))
+                        WHERE planname=%s AND codeid=%s)""", (planname, codeID, planname, codeID, ))
         connection.commit()
         cursor.close()
     except(Exception, psycopg2.Error) as errorMsg:
@@ -429,7 +458,7 @@ def insert_FIplan(connection, planname):
 def get_originallineid(connection, linename):
     try:
         cursor = connection.cursor()
-        cursor.execute("SELECT tblline.lineid FROM tbloriginalline INNER JOIN tblline ON tbloriginalline.lineid = tblline.lineid WHERE tblline.codeid = %s AND tblline.linename", (codeID, linename))
+        cursor.execute("SELECT tbloriginalline.originallineid FROM tbloriginalline INNER JOIN tblline ON tbloriginalline.lineid = tblline.lineid WHERE tblline.codeid = %s AND tblline.linename = %s", (codeID, linename))
         myline = cursor.fetchone()
         print(myline[0])
         cursor.close()
@@ -440,13 +469,12 @@ def get_originallineid(connection, linename):
 
 
 # Insert mutant line into database
-def insert_mutant(connection, planname, mutantline, linename):
+def insert_mutant(connection, linename, mutantline):
     try:
-        planid = get_FIplanid(connection, planname)
         originallineid = get_originallineid(connection, linename)
         cursor = connection.cursor()
         cursor.execute("INSERT INTO tblmutant(originallineid, planid, mutantlinename) VALUES( %s, %s, %s)",
-                       (originallineid, planid, mutantline))
+                       (originallineid, planID, mutantline))
         connection.commit()
         cursor.close()
     except(Exception, psycopg2.Error) as errorMsg:
@@ -455,12 +483,11 @@ def insert_mutant(connection, planname, mutantline, linename):
 
 
 # Returns mutant line from database
-def get_mutantline(connection, planname, linename):
+def get_mutantline(connection, linename):
     try:
-        planid = get_FIplanid(connection, planname)
         originallineid = get_originallineid(connection, linename)
         cursor = connection.cursor()
-        cursor.execute("SELECT mutantlinename FROM tblmutant  WHERE originallineid = %s AND planid = %s", (originallineid, planid, ))
+        cursor.execute("SELECT mutantlinename FROM tblmutant  WHERE originallineid = %s AND planid = %s", (originallineid, planID, ))
         mymutantlinetuple = cursor.fetchone()
         print(mymutantlinetuple[0])
         cursor.close()
@@ -471,11 +498,10 @@ def get_mutantline(connection, planname, linename):
 
 
 # Returns faultid
-def get_faultid(connection, planname, faultname):
+def get_faultid(connection, faultname):
     try:
-        planid = get_FIplanid(connection, planname)
         cursor = connection.cursor()
-        cursor.execute("SELECT faultid FROM tblfault WHERE faultname= %s AND planid= %s", (faultname, planid, ))
+        cursor.execute("SELECT faultid FROM tblfault WHERE faultname= %s AND planid= %s", (faultname, planID, ))
         myidtuple = cursor.fetchone()
         myid = myidtuple[0]
         cursor.close()
@@ -486,13 +512,13 @@ def get_faultid(connection, planname, faultname):
 
 
 # If faultname exists, increase fault value. Otherwise insert faultname into database
-def insert_fault(connection, planname, faultname):
+def insert_fault(connection, faultname):
     try:
-        planid = get_FIplanid(connection, planname)
+        #planid = get_FIplanid(connection, planname)
         cursor = connection.cursor()
         cursor.execute("""UPDATE tblfault SET faultvalue = faultvalue +1 WHERE planid=%s AND faultname=%s AND EXISTS(SELECT 1 FROM tblfault WHERE planid=%s AND faultname=%s);
                           INSERT INTO tblfault(planid ,faultname) select  %s, %s WHERE NOT EXISTS(SELECT 1 FROM tblfault WHERE planid=%s AND faultname=%s)
-                            """, ( planid, faultname, planid, faultname, planid, faultname, planid, faultname))
+                            """, ( planID, faultname, planID, faultname, planID, faultname, planID, faultname))
         connection.commit()
         cursor.close()
     except(Exception, psycopg2.Error) as errorMsg:
@@ -501,11 +527,10 @@ def insert_fault(connection, planname, faultname):
 
 
 # Lists faults
-def list_faults(connection, planname):
+def list_faults(connection):
     try:
-        planid = get_FIplanid(connection, planname)
         cursor = connection.cursor()
-        cursor.execute("SELECT faultname, faultvalue FROM tblfault  WHERE planid = %s", (planid,))
+        cursor.execute("SELECT faultname, faultvalue FROM tblfault  WHERE planid = %s", (planID,))
         faultuple=cursor.fetchall()
         print(faultuple)
         connection.commit()
@@ -517,11 +542,15 @@ def list_faults(connection, planname):
 
 
 # Insert execution into database
-def insert_execution(connection,  name, ubuntu, ros, python, gazebo, memory, timelimit, codeid):
+def insert_execution(connection,  name, ubuntu, ros, python, gazebo, memory, timelimit):
     try:
         cursor = connection.cursor()
+        # cursor.execute("""INSERT INTO tblexecution(name, ubuntu, ros, python, gazebo, memory, timelimit, codeid)
+        #                   VALUES( %s, %s, %s, %s, %s, %s, %s, %s)""", (name, ubuntu, ros, python, gazebo, memory, timelimit, codeID))
         cursor.execute("""INSERT INTO tblexecution(name, ubuntu, ros, python, gazebo, memory, timelimit, codeid) 
-                          VALUES( %s, %s, %s, %s, %s, %s, %s)""", (name, ubuntu, ros, python, gazebo, memory, timelimit, codeID))
+                                  SELECT %s, %s, %s, %s, %s, %s, %s, %s
+                                  WHERE NOT EXISTS (SELECT 1 FROM tblexecution where name = %s)""",
+                       (name, ubuntu, ros, python, gazebo, memory, timelimit, codeID, name))
         connection.commit()
         cursor.close()
     except(Exception, psycopg2.Error) as errorMsg:
@@ -672,13 +701,12 @@ def update_executiontimelimit(connection, name, timelimit):
 
 
 # Insert metric into database
-def insert_metric(connection, planname, executionname, metricname, metricvalue):
+def insert_metric(connection, executionname, metricname, metricvalue):
     try:
         cursor = connection.cursor()
         executionid = get_executionid(connection, executionname)
-        planid = get_FIplanid(connection, planname)
         cursor.execute("INSERT INTO tblmetric(planid, executionid, metricname, metricvalue) VALUES( %s, %s, %s, %s)",
-                       (planid, executionid, metricname, metricvalue))
+                       (planID, executionid, metricname, metricvalue))
         connection.commit()
         cursor.close()
     except(Exception, psycopg2.Error) as errorMsg:
@@ -687,13 +715,12 @@ def insert_metric(connection, planname, executionname, metricname, metricvalue):
 
 
 # Lists metrics' names and values
-def list_metrics(connection, planname, executionname):
+def list_metrics(connection, executionname):
     try:
         cursor = connection.cursor()
         executionid = get_executionid(connection, executionname)
-        planid = get_FIplanid(connection, planname)
         cursor.execute("SELECT metricname, metricvalue FROM tblmetric WHERE executionid = %s AND planid = %s",
-                       (executionid, planid))
+                       (executionid, planID))
         metrics = cursor.fetchall()
         print(metrics[0])
         cursor.close()
@@ -704,13 +731,12 @@ def list_metrics(connection, planname, executionname):
 
 
 # Insert states' name and value into database
-def insert_state(connection, planname, executionname, statename, statevalue):
+def insert_state(connection, executionname, statename, statevalue):
     try:
         cursor = connection.cursor()
         executionid = get_executionid(connection, executionname)
-        planid = get_FIplanid(connection, planname)
         cursor.execute("INSERT INTO tblstate(planid, executionid, statename, statevalue) VALUES( %s, %s, %s, %s)",
-                       (planid, executionid, statename, statevalue))
+                       (planID, executionid, statename, statevalue))
         cursor.close()
     except(Exception, psycopg2.Error) as errorMsg:
         print("A database-related error occured: ", errorMsg)
@@ -718,13 +744,12 @@ def insert_state(connection, planname, executionname, statename, statevalue):
 
 
 # Lists states
-def list_states(connection, planname, executionname):
+def list_states(connection, executionname):
     try:
         cursor = connection.cursor()
         executionid = get_executionid(connection, executionname)
-        planid = get_FIplanid(connection, planname)
         cursor.execute("SELECT statename, statevalue FROM tblstate WHERE executionid = %s AND planid = %s",
-                       (executionid, planid))
+                       (executionid, planID))
         statetuple = cursor.fetchall()
         print(statetuple)
         connection.commit()
@@ -736,13 +761,12 @@ def list_states(connection, planname, executionname):
 
 
 # Insert rosbag into database
-def insert_rosbag(connection, planname, executionname, rosbagname, rosbagdata):
+def insert_rosbag(connection, executionname, rosbagname, rosbagdata):
     try:
         cursor = connection.cursor()
         executionid = get_executionid(connection, executionname)
-        planid = get_FIplanid(connection, planname)
         cursor.execute("INSERT INTO tblrosbag(planid, executionid, rosbagname, rosbagdata) VALUES( %s, %s, %s, %s)",
-                       (planid, executionid, rosbagname, rosbagdata))
+                       (planID, executionid, rosbagname, rosbagdata))
         connection.commit()
         cursor.close()
     except(Exception, psycopg2.Error) as errorMsg:
@@ -751,13 +775,12 @@ def insert_rosbag(connection, planname, executionname, rosbagname, rosbagdata):
 
 
 # Returns rosbagdata
-def get_rosbagdata(connection, planname, executionname):
+def get_rosbagdata(connection, executionname):
     try:
         cursor = connection.cursor()
         executionid = get_executionid(connection, executionname)
-        planid = get_FIplanid(connection, planname)
         cursor.execute("SELECT rosbagdata FROM tblrosbag WHERE executionid = %s AND planid = %s",
-                       (executionid, planid))
+                       (executionid, planID))
         rosbagdata = cursor.fetchone()
         print(rosbagdata)
         connection.commit()
@@ -769,13 +792,12 @@ def get_rosbagdata(connection, planname, executionname):
 
 
 # Lists rosbag files from database
-def list_rosbags(connection, planname, executionname):
+def list_rosbags(connection, executionname):
     try:
         cursor = connection.cursor()
         executionid = get_executionid(connection, executionname)
-        planid = get_FIplanid(connection, planname)
         cursor.execute("SELECT rosbagname FROM tblrosbag WHERE executionid = %s AND planid = %s",
-                       (executionid, planid))
+                       (executionid, planID))
         rosbagtuple = cursor.fetchall()
         print(rosbagtuple)
         connection.commit()
@@ -787,14 +809,13 @@ def list_rosbags(connection, planname, executionname):
 
 
 # Insert reports into database
-def insert_report(connection, planname, executionname, ast, pdfname, mutationscore):
+def insert_report(connection, executionname, ast, pdfname, mutationscore):
     try:
         cursor = connection.cursor()
         executionid = get_executionid(connection, executionname)
-        planid = get_FIplanid(connection, planname)
         doc = open(pdfname+'.pdf', 'rb').read()
         cursor.execute("INSERT INTO tblreport(planid, executionid, astdiagram, pdfname, mutationscore, pdfdata) VALUES( %s, %s, %s, %s, %s, %s)",
-                       (planid, executionid, ast, pdfname, mutationscore, doc))
+                       (planID, executionid, ast, pdfname, mutationscore, doc))
         connection.commit()
         cursor.close()
     except(Exception, psycopg2.Error) as errorMsg:
@@ -820,12 +841,11 @@ def get_mutation_score(connection, planname, executionname):
 
 
 # Returns pdf from table report
-def get_pdf(connection, planname, executionname):
+def get_pdf(connection, executionname):
     try:
         cursor = connection.cursor()
         executionid = get_executionid(connection, executionname)
-        planid = get_FIplanid(connection, planname)
-        cursor.execute("SELECT pdfname, pdfdata FROM tblreport WHERE executionid = %s AND planid = %s", (executionid, planid, ))
+        cursor.execute("SELECT pdfname, pdfdata FROM tblreport WHERE executionid = %s AND planid = %s", (executionid, planID, ))
         pdf = cursor.fetchone()
         print(pdf)
         connection.commit()
